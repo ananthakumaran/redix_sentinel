@@ -1,0 +1,56 @@
+version: '3'
+
+services:
+  app:
+    container_name: redix_sentinel
+    image: bitwalker/alpine-elixir:1.4.5
+    volumes:
+      - .:/opt/app
+  redis_1:
+    container_name: redis_1
+    image: redis:alpine
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports:
+      - "1379:1379"
+    volumes:
+      - ./docker/redis_1.conf:/usr/local/etc/redis/redis.conf
+  redis_2:
+    container_name: redis_2
+    image: redis:alpine
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports:
+      - "2379:2379"
+    volumes:
+      - ./docker/redis_2.conf:/usr/local/etc/redis/redis.conf
+  redis_3:
+    container_name: redis_3
+    image: redis:alpine
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports:
+      - "3379:3379"
+    volumes:
+      - ./docker/redis_3.conf:/usr/local/etc/redis/redis.conf
+  sentinel_1:
+    container_name: sentinel_1
+    image: redis:alpine
+    command: ["redis-server", "/usr/local/etc/redis/sentinel.conf", "--sentinel"]
+    ports:
+      - "10000:10000"
+    volumes:
+      - ./docker/sentinel_1.conf:/usr/local/etc/redis/sentinel.conf
+  sentinel_2:
+    container_name: sentinel_2
+    image: redis:alpine
+    command: ["redis-server", "/usr/local/etc/redis/sentinel.conf", "--sentinel"]
+    ports:
+      - "20000:20000"
+    volumes:
+      - ./docker/sentinel_2.conf:/usr/local/etc/redis/sentinel.conf
+  sentinel_3:
+    container_name: sentinel_3
+    image: redis:alpine
+    command: ["redis-server", "/usr/local/etc/redis/sentinel.conf", "--sentinel"]
+    ports:
+      - "30000:30000"
+    volumes:
+      - ./docker/sentinel_3.conf:/usr/local/etc/redis/sentinel.conf
