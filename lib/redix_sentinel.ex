@@ -20,9 +20,9 @@ defmodule RedixSentinel do
     Connection.start_link(__MODULE__, {sentinel_opts, redis_connection_opts, redix_behaviour_opts}, connection_opts)
   end
 
-  @spec close(GenServer.server) :: :ok
-  def close(conn) do
-    Connection.stop(conn)
+  @spec stop(GenServer.server) :: :ok
+  def stop(conn) do
+    GenServer.stop(conn)
   end
 
   def pipeline(conn, commands, opts \\ []) do

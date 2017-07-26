@@ -46,7 +46,6 @@ defmodule RedixSentinel.Utils do
   @sentinel_behaviour_opts [:backoff_initial, :backoff_max]
   def split_opts(sentinel_opts, redis_connection_opts, redix_opts) do
     {redix_behaviour_opts, connection_opts} = Keyword.split(redix_opts, @redix_behaviour_opts)
-    not_supported([:host, :port], redis_connection_opts)
     not_supported([:exit_on_disconnection, :sync_connect], redix_opts)
 
     {sentinel_behaviour_opts, redix_behaviour_opts} = Keyword.split(redix_behaviour_opts, @sentinel_behaviour_opts)
