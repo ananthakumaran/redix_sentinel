@@ -22,3 +22,5 @@ erl_crash.dump
 .mix
 
 .ash_history
+
+.hex

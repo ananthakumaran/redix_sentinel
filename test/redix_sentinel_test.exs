@@ -24,6 +24,8 @@ defmodule RedixSentinelTest do
       {:pid, pid} ->
         Process.sleep(100)
         assert Process.alive?(pid) === false
+    after
+      1000 -> flunk("Failed to receive PONG")
     end
   end
 

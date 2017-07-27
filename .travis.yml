@@ -1,0 +1,23 @@
+sudo: required
+
+env:
+  DOCKER_COMPOSE_VERSION: 1.15.0
+
+language: elixir
+services:
+  - docker
+
+before_install:
+ - sudo apt-get update
+ - sudo apt-get -y -o Dpkg::Options::="--force-confnew" install docker-ce
+ - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
+ - chmod +x docker-compose
+ - sudo mv docker-compose /usr/local/bin
+
+script:
+  - docker --version
+  - docker-compose -v
+  - docker-compose up -d redis_1 redis_2 redis_3 sentinel_1 sentinel_2 sentinel_3
+  - sleep 30
+  - docker-compose run app mix do local.hex --force, deps.get
+  - docker-compose run app mix test --trace
