@@ -26,31 +26,37 @@ defmodule RedixSentinel do
   end
 
   def pipeline(conn, commands, opts \\ []) do
-    with {:ok, node} <- get_node(conn) do
+    with_node(conn, fn node ->
       Redix.pipeline(node, commands, opts)
-    end
+    end)
   end
 
   def pipeline!(conn, commands, opts \\ []) do
-    with {:ok, node} <- get_node(conn) do
+    with_node(conn, fn node ->
       Redix.pipeline!(node, commands, opts)
-    end
+    end)
   end
 
   def command(conn, command, opts \\ []) do
-    with {:ok, node} <- get_node(conn) do
+    with_node(conn, fn node ->
       Redix.command(node, command, opts)
-    end
+    end)
   end
 
   def command!(conn, command, opts \\ []) do
-    with {:ok, node} <- get_node(conn) do
+    with_node(conn, fn node ->
       Redix.command!(node, command, opts)
-    end
+    end)
   end
 
-  defp get_node(conn) do
-    Connection.call(conn, :node)
+  defp with_node(conn, callback) do
+    with {:ok, node} <- Connection.call(conn, :node) do
+      try do
+        callback.(node)
+      catch
+        :exit, {:noproc, _} -> {:error, :closed}
+      end
+    end
   end
 
   def init({sentinel_opts, redis_connection_opts, redix_behaviour_opts}) do

@@ -1,9 +1,14 @@
+require Logger
 defmodule Test do
   def loop(x, i \\ 0) do
     try do
       x.(i)
     catch
-      :exit, _ -> :ok
+      :exit, {:timeout, _} ->
+        :ok
+      :exit, reason ->
+        Logger.error "[exit]=================> #{inspect(reason)}"
+        :ok
     end
     Process.sleep(100)
     loop(x, i+1)
@@ -21,10 +26,10 @@ spawn_link(fn ->
   Test.loop(fn i ->
     case RedixSentinel.command(conn, ["GET", "#{i}"]) do
       {:ok, _} ->
-        if Integer.mod(i, 100) do
-          IO.puts "#{i}"
+        if Integer.mod(i, 100) == 0 do
+          Logger.debug "GET #{i}"
         end
-      {:error, error} -> IO.inspect(error)
+      {:error, _error} -> :ok
     end
   end)
 end)
@@ -34,10 +39,10 @@ spawn_link(fn ->
   Test.loop(fn i ->
     case RedixSentinel.command(conn, ["SET", "#{i}", "#{i}"]) do
       {:ok, _} ->
-        if Integer.mod(i, 100) do
-          IO.puts "#{i}"
+        if Integer.mod(i, 100) == 0 do
+          Logger.debug "SET #{i}"
         end
-      {:error, error} -> IO.inspect(error)
+      {:error, _error} -> :ok
     end
   end)
 end)

@@ -58,4 +58,24 @@ defmodule RedixSentinelTest do
     Process.alive?(node) == false
     Process.alive?(pid) == false
   end
+
+  test "catch noproc errors" do
+    current = self()
+    {ok, pid} = RedixSentinel.start_link(@sentinel_config, [], [name: :sentinel])
+    {:ok, node} = Connection.call(pid, :node)
+    :sys.suspend(pid)
+    spawn_link(fn ->
+      {:error, :closed} = RedixSentinel.command(pid, ["PING"])
+      send(current, :ok)
+    end)
+    Process.sleep(500)
+    Process.exit(node, :kill)
+    :sys.resume(pid)
+    receive do
+      :ok -> :ok
+    after
+      1000 -> flunk("Failed to receive response for PING")
+    end
+    :ok = RedixSentinel.stop(pid)
+  end
 end
