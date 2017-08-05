@@ -49,7 +49,7 @@ defmodule RedixSentinel do
 
   ## Redis Connection Options
 
-  The host and port obtained via sentinel will be merged and passed as the first option to `Redix.start_link/2`
+  The host and port obtained via sentinel will be merged with this option and passed as the first option to `Redix.start_link/2`
 
   ## Redix Behaviour Options
 
