@@ -33,7 +33,8 @@ defmodule RedixSentinel.Utils do
 
   @default_opts [
     backoff_initial: 500,
-    backoff_max: 30_000
+    backoff_max: 30_000,
+    role: "master"
   ]
 
   @log_default_opts [

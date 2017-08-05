@@ -1,4 +1,21 @@
 defmodule RedixSentinel do
+  @moduledoc """
+  RedixSentinel provides support for sentinels. A Redix process is
+  started as child process with `:exit_on_disconnection` set to true
+  and the reconnection is handled by the parent process. All the
+  functions except `start_link/3` has the same API interface as Redix
+
+  ## Example
+
+      sentinels = [
+        [host: "sentinel_3", port: 30000],
+        [host: "sentinel_2", port: 20000],
+        [host: "sentinel_1", port: 10000]
+      ]
+      {:ok, pid} = RedixSentinel.start_link([group: "demo", sentinels: sentinels, role: "master"])
+      {:ok, "PONG"} = RedixSentinel.command(pid, ["PING"])
+  """
+
   require Logger
   alias RedixSentinel.Utils
   use Connection
@@ -14,35 +31,78 @@ defmodule RedixSentinel do
               backoff_current: nil
   end
 
+  @type command :: [binary]
+
+  @doc """
+  Creates a connection to redis server via the information obtained
+  from one of the sentinels. Follows the protocol specified in
+  [https://redis.io/topics/sentinel-clients](https://redis.io/topics/sentinel-clients)
+  to obtain the server's host and port information.
+
+  ## Sentinel Options
+
+  * `:sentinels` -  List of sentinel address. Each address should be a keyword list with `host (string)` and `port (integer)` fields.
+
+  * `:role` - (string) Role of the server. Should be either `"master"` or `"slave"`. Defaults to `"master"`.
+
+  * `:group` - (string) Name of the redis sentinel group.
+
+  ## Redis Connection Options
+
+  The host and port obtained via sentinel will be merged and passed as the first option to `Redix.start_link/2`
+
+  ## Redix Behaviour Options
+
+  Please refer `Redix.start_link/2` for the list of
+  options. `:sync_connect` and `:exit_on_disconnection` are not
+  supported. All the extra options like `:name` are forwarded to the
+  `GenServer.start_link/3`
+  """
   @spec start_link(Keyword.t, Keyword.t, Keyword.t) :: GenServer.on_start
   def start_link(sentinel_opts, redis_connection_options \\ [], redix_opts \\ []) do
     {sentinel_opts, redis_connection_opts, redix_behaviour_opts, connection_opts} = Utils.split_opts(sentinel_opts, redis_connection_options, redix_opts)
     Connection.start_link(__MODULE__, {sentinel_opts, redis_connection_opts, redix_behaviour_opts}, connection_opts)
   end
 
-  @spec stop(GenServer.server) :: :ok
-  def stop(conn) do
-    GenServer.stop(conn)
+
+  @doc "see `Redix.stop/2`."
+  @spec stop(GenServer.server, timeout) :: :ok
+  def stop(conn, timeout \\ :infinity) do
+    GenServer.stop(conn, timeout)
   end
 
+  @doc "see `Redix.pipeline/3`."
+  @spec pipeline(GenServer.server, [command], Keyword.t) ::
+    {:ok, [Redix.Protocol.redis_value]} |
+    {:error, atom}
   def pipeline(conn, commands, opts \\ []) do
     with_node(conn, fn node ->
       Redix.pipeline(node, commands, opts)
     end)
   end
 
+  @doc "see `Redix.pipeline!/3`."
+  @spec pipeline!(GenServer.server, [command], Keyword.t) ::
+    [Redix.Protocol.redis_value] | no_return
   def pipeline!(conn, commands, opts \\ []) do
     with_node(conn, fn node ->
       Redix.pipeline!(node, commands, opts)
     end)
   end
 
+  @doc "see `Redix.command/3`."
+  @spec command(GenServer.server, command, Keyword.t) ::
+    {:ok, Redix.Protocol.redis_value} |
+    {:error, atom | Redix.Error.t}
   def command(conn, command, opts \\ []) do
     with_node(conn, fn node ->
       Redix.command(node, command, opts)
     end)
   end
 
+  @doc "see `Redix.command!/3`."
+  @spec command!(GenServer.server, command, Keyword.t) ::
+    Redix.Protocol.redis_value | no_return
   def command!(conn, command, opts \\ []) do
     with_node(conn, fn node ->
       Redix.command!(node, command, opts)
@@ -54,7 +114,7 @@ defmodule RedixSentinel do
       try do
         callback.(node)
       catch
-        :exit, {:noproc, _} -> {:error, :closed}
+        :exit, {:noproc, _} -> {:error, %Redix.ConnectionError{reason: :closed}}
       end
     end
   end
@@ -64,7 +124,7 @@ defmodule RedixSentinel do
     {:connect, :init, %State{redix_behaviour_opts: redix_behaviour_opts, redis_connection_opts: redis_connection_opts, sentinel_opts: sentinel_opts}}
   end
 
-  def connect(info, %State{sentinel_opts: sentinel_opts, redis_connection_opts: redis_connection_opts} = s) do
+  def connect(info, %State{sentinel_opts: sentinel_opts} = s) do
     case find_and_connect(s) do
       {:ok, s} ->
         if info == :backoff || info == :reconnect do
@@ -87,7 +147,7 @@ defmodule RedixSentinel do
   end
 
   def handle_call(:node, _from, %State{node: nil} = s) do
-    {:reply, {:error, :closed}, s}
+    {:reply, {:error, %Redix.ConnectionError{reason: :closed}}, s}
   end
 
   def handle_call(:node, _from, %State{node: node} = s) do
@@ -95,7 +155,7 @@ defmodule RedixSentinel do
   end
 
   def handle_info({:EXIT, _, :noproc}, s) do
-    error = {:error, :closed}
+    error = {:error, %Redix.ConnectionError{reason: :closed}}
     {:disconnect, error, s}
   end
 
@@ -138,7 +198,7 @@ defmodule RedixSentinel do
     try_sentinel(s, [], Keyword.fetch!(sentinel_opts, :sentinels))
   end
 
-  defp try_sentinel(%State{sentinel_opts: sentinel_opts} = s, tried, []) do
+  defp try_sentinel(_s, _tried, []) do
     {:error, "Failed to connect via any sentinel"}
   end
 
@@ -162,7 +222,7 @@ defmodule RedixSentinel do
       send(current, {:ok, s})
     end)
     receive do
-      {:DOWN, ^reference, :process, ^pid, reason} ->
+      {:DOWN, ^reference, :process, ^pid, _reason} ->
         try_sentinel(s, [sentinel_connection_opts | tried], rest)
       {:ok, s} ->
         Process.demonitor(reference, [:flush])
@@ -179,16 +239,16 @@ defmodule RedixSentinel do
     Logger.log(level, message)
   end
 
-  def get_node_info(conn, group, "master") do
+  defp get_node_info(conn, group, "master") do
     [host, port] = Redix.command!(conn, ["SENTINEL", "get-master-addr-by-name", group])
     [host: host, port: String.to_integer(port)]
   end
 
-  def get_node_info(conn, group, "slave") do
+  defp get_node_info(conn, group, "slave") do
     Redix.command!(conn, ["SENTINEL", "slaves", group])
     |> Enum.random
     |> Enum.chunk(2)
-    |> Enum.filter_map(fn [key, value] ->
+    |> Enum.filter_map(fn [key, _value] ->
       Enum.member?(["ip", "port"], key)
     end, fn [key, value] ->
       case key do

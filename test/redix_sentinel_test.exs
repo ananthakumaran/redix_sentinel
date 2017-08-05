@@ -65,7 +65,7 @@ defmodule RedixSentinelTest do
     {:ok, node} = Connection.call(pid, :node)
     :sys.suspend(pid)
     spawn_link(fn ->
-      {:error, :closed} = RedixSentinel.command(pid, ["PING"])
+      {:error, %{reason: :closed}} = RedixSentinel.command(pid, ["PING"])
       send(current, :ok)
     end)
     Process.sleep(500)
