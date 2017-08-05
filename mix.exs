@@ -34,12 +34,12 @@ defmodule RedixSentinel.Mixfile do
 
   defp package do
     %{licenses: ["MIT"],
-      links: %{"Github" => "https://github.com/ananthakumaran/redix-sentinel"},
+      links: %{"Github" => "https://github.com/ananthakumaran/redix_sentinel"},
       maintainers: ["ananthakumaran@gmail.com"]}
   end
 
   defp docs do
-    [source_url: "https://github.com/ananthakumaran/redix-sentinel",
+    [source_url: "https://github.com/ananthakumaran/redix_sentinel",
      source_ref: "v#{@version}",
      main: RedixSentinel,
      extras: ["README.md"]]
