@@ -12,7 +12,6 @@ defmodule RedixSentinel.Mixfile do
      docs: docs(),
      dialyzer: [
        plt_add_deps: :transitive,
-       ignore_warnings: ".dialyzer_ignore",
        flags: [:unmatched_returns, :race_conditions, :error_handling, :underspecs]
      ],
      deps: deps()]

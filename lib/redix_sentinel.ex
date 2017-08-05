@@ -68,7 +68,7 @@ defmodule RedixSentinel do
   @doc "see `Redix.stop/2`."
   @spec stop(GenServer.server, timeout) :: :ok
   def stop(conn, timeout \\ :infinity) do
-    GenServer.stop(conn, timeout)
+    GenServer.stop(conn, :normal, timeout)
   end
 
   @doc "see `Redix.pipeline/3`."
@@ -127,21 +127,20 @@ defmodule RedixSentinel do
   def connect(info, %State{sentinel_opts: sentinel_opts} = s) do
     case find_and_connect(s) do
       {:ok, s} ->
-        if info == :backoff || info == :reconnect do
+        _ = if info == :backoff || info == :reconnect do
           log(s, :reconnection, ["Reconnected to (", Utils.format_host(s.node_info), ")"])
         end
         s = %{s | backoff_current: nil}
         {:ok, s}
       {:error, reason} ->
         backoff = get_backoff(s)
-        log(s, :failed_connection, ["Failed to connect to ", to_string(Keyword.fetch!(sentinel_opts, :role)), " node ", Utils.format_error(reason), ". Sleeping for ", to_string(backoff), "ms."])
+        _ = log(s, :failed_connection, ["Failed to connect to ", to_string(Keyword.fetch!(sentinel_opts, :role)), " node ", Utils.format_error(reason), ". Sleeping for ", to_string(backoff), "ms."])
         {:backoff, backoff, %{s | backoff_current: backoff}}
-      {:stop, reason} -> {:stop, reason, s}
     end
   end
 
   def disconnect({:error, reason}, %State{node_info: node_info} = s) do
-    log(s, :disconnection, ["Disconnected from (", Utils.format_host(node_info), "): ", Utils.format_error(reason)])
+    _ = log(s, :disconnection, ["Disconnected from (", Utils.format_host(node_info), "): ", Utils.format_error(reason)])
     cleanup(s)
     {:connect, :reconnect, %{s | node: nil, backoff_current: nil, node_info: nil}}
   end
@@ -206,14 +205,14 @@ defmodule RedixSentinel do
     role = Keyword.fetch!(sentinel_opts, :role)
     current = self()
     {pid, reference} = spawn_monitor(fn ->
-      Logger.debug "Trying sentinel #{inspect(sentinel_connection_opts)}"
+      _ = log(s, :sentinel_connection, "Trying sentinel #{inspect(sentinel_connection_opts)}")
       {:ok, sentinel_conn} = Redix.start_link(sentinel_connection_opts, Keyword.merge(s.redix_behaviour_opts, [exit_on_disconnection: true, sync_connect: true]))
       node_info = get_node_info(sentinel_conn, Keyword.fetch!(sentinel_opts, :group), role)
 
-      Logger.debug "Got #{role} address #{inspect(node_info)}"
+      _ = log(s, :sentinel_connection, "Got #{role} address #{inspect(node_info)}")
       {:ok, conn} = Redix.start_link(Keyword.merge(s.redis_connection_opts, node_info), Keyword.merge(s.redix_behaviour_opts, [exit_on_disconnection: true]))
 
-      Logger.debug "Verifying role"
+      _ = log(s, :sentinel_connection, "Verifying role")
       [^role | _] = Redix.command!(conn, ["ROLE"])
 
       Redix.stop(sentinel_conn)
