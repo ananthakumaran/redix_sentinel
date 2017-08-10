@@ -9,6 +9,9 @@ defmodule Test do
       :exit, reason ->
         Logger.error "[exit]=================> #{inspect(reason)}"
         :ok
+      :error, %Redix.Error{message: message} ->
+        Logger.error "[error]=================> #{message}"
+        :ok
     end
     Process.sleep(100)
     loop(x, i+1)
@@ -22,7 +25,7 @@ sentinels = [
 ]
 
 spawn_link(fn ->
-  {:ok, conn} = RedixSentinel.start_link([group: "demo", sentinels: sentinels, role: "slave"])
+  {:ok, conn} = RedixSentinel.start_link([group: "demo", sentinels: sentinels, role: "slave", verify_role: 10_000])
   Test.loop(fn i ->
     case RedixSentinel.command(conn, ["GET", "#{i}"]) do
       {:ok, _} ->
@@ -35,7 +38,7 @@ spawn_link(fn ->
 end)
 
 spawn_link(fn ->
-  {:ok, conn} = RedixSentinel.start_link([group: "demo", sentinels: sentinels, role: "master"])
+  {:ok, conn} = RedixSentinel.start_link([group: "demo", sentinels: sentinels, role: "master", verify_role: 10_000])
   Test.loop(fn i ->
     case RedixSentinel.command(conn, ["SET", "#{i}", "#{i}"]) do
       {:ok, _} ->

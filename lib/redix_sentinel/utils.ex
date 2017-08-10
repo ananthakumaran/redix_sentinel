@@ -37,7 +37,8 @@ defmodule RedixSentinel.Utils do
   @default_opts [
     backoff_initial: 500,
     backoff_max: 30_000,
-    role: "master"
+    role: "master",
+    verify_role: 0
   ]
 
   @log_default_opts [
@@ -54,7 +55,7 @@ defmodule RedixSentinel.Utils do
     _ = not_supported([:exit_on_disconnection, :sync_connect], redix_opts)
 
     {sentinel_behaviour_opts, redix_behaviour_opts} = Keyword.split(redix_behaviour_opts, @sentinel_behaviour_opts)
-    sentinel_opts = Keyword.merge(sentinel_opts, @default_opts)
+    sentinel_opts = Keyword.merge(@default_opts, sentinel_opts)
     |> Keyword.merge(sentinel_behaviour_opts)
     |> Keyword.put(:log, Keyword.get(redix_behaviour_opts, :log, @log_default_opts))
 

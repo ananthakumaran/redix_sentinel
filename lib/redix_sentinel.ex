@@ -121,7 +121,9 @@ defmodule RedixSentinel do
 
   def init({sentinel_opts, redis_connection_opts, redix_behaviour_opts}) do
     Process.flag(:trap_exit, true)
-    {:connect, :init, %State{redix_behaviour_opts: redix_behaviour_opts, redis_connection_opts: redis_connection_opts, sentinel_opts: sentinel_opts}}
+    state = %State{redix_behaviour_opts: redix_behaviour_opts, redis_connection_opts: redis_connection_opts, sentinel_opts: sentinel_opts}
+    schedule_verification(state)
+    {:connect, :init, state}
   end
 
   def connect(info, %State{sentinel_opts: sentinel_opts} = s) do
@@ -163,6 +165,14 @@ defmodule RedixSentinel do
     {:disconnect, error, s}
   end
 
+  def handle_info(:verify_role, s) do
+    schedule_verification(s)
+    case verify_role(s) do
+      {:ok} -> {:noreply, s}
+      {:error, _} = e -> {:disconnect, e, s}
+    end
+  end
+
   def handle_info(msg, state) do
     _ = Logger.warn(["Unknown message: ", inspect(msg)])
     {:noreply, state}
@@ -185,6 +195,7 @@ defmodule RedixSentinel do
   defp cleanup(%State{node: node}) do
     if node do
       try do
+        Process.unlink(node)
         Redix.stop(node)
       catch
         :exit, _ -> :ok
@@ -229,6 +240,30 @@ defmodule RedixSentinel do
         {:ok, s}
     end
   end
+
+  defp schedule_verification(%State{sentinel_opts: sentinel_opts}) do
+    verify_role = Keyword.fetch!(sentinel_opts, :verify_role)
+    if verify_role > 0 do
+      Process.send_after(self(), :verify_role, verify_role)
+    end
+  end
+
+  defp verify_role(%State{node: node} = s) do
+    role = Keyword.fetch!(s.sentinel_opts, :role)
+    current = self()
+    {pid, reference} = spawn_monitor(fn ->
+      [^role | _] = Redix.command!(node, ["ROLE"])
+      send(current, {:ok})
+    end)
+    receive do
+      {:DOWN, ^reference, :process, ^pid, _reason} ->
+        {:error, "Failed to verify role"}
+      {:ok} ->
+        Process.demonitor(reference, [:flush])
+        {:ok}
+    end
+  end
+  defp verify_role(_), do: {:ok}
 
   defp log(state, action, message) do
     level =

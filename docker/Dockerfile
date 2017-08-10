@@ -1,4 +1,4 @@
-FROM redis:alpine
+FROM redis:3.0.7-alpine
 COPY redis_1.conf /usr/local/etc/redis/redis_1.conf
 RUN chown redis:redis /usr/local/etc/redis/redis_1.conf
 RUN chmod u+w /usr/local/etc/redis/redis_1.conf
