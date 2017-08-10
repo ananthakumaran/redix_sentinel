@@ -1,7 +1,7 @@
 defmodule RedixSentinel.Mixfile do
   use Mix.Project
 
-  @version "0.2.0"
+  @version "0.3.0"
 
   def project do
     [app: :redix_sentinel,
@@ -23,7 +23,7 @@ defmodule RedixSentinel.Mixfile do
 
   defp deps do
     [
-      {:redix, "~> 0.5"},
+      {:redix, "~> 0.6"},
       {:connection, "~> 1.0.3"},
 
       {:ex_doc, "~> 0.16", only: :dev},
