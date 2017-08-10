@@ -122,7 +122,7 @@ defmodule RedixSentinel do
   def init({sentinel_opts, redis_connection_opts, redix_behaviour_opts}) do
     Process.flag(:trap_exit, true)
     state = %State{redix_behaviour_opts: redix_behaviour_opts, redis_connection_opts: redis_connection_opts, sentinel_opts: sentinel_opts}
-    schedule_verification(state)
+    :ok = schedule_verification(state)
     {:connect, :init, state}
   end
 
@@ -166,7 +166,7 @@ defmodule RedixSentinel do
   end
 
   def handle_info(:verify_role, s) do
-    schedule_verification(s)
+    :ok = schedule_verification(s)
     case verify_role(s) do
       {:ok} -> {:noreply, s}
       {:error, _} = e -> {:disconnect, e, s}
@@ -244,7 +244,10 @@ defmodule RedixSentinel do
   defp schedule_verification(%State{sentinel_opts: sentinel_opts}) do
     verify_role = Keyword.fetch!(sentinel_opts, :verify_role)
     if verify_role > 0 do
-      Process.send_after(self(), :verify_role, verify_role)
+      _ref = Process.send_after(self(), :verify_role, verify_role)
+      :ok
+    else
+      :ok
     end
   end
 
