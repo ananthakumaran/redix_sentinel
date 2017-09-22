@@ -14,6 +14,20 @@ defmodule RedixSentinel do
       ]
       {:ok, pid} = RedixSentinel.start_link([group: "demo", sentinels: sentinels, role: "master"])
       {:ok, "PONG"} = RedixSentinel.command(pid, ["PING"])
+
+  ## Supervisor Example
+
+
+      sentinels = [
+        [host: "sentinel_3", port: 30000],
+        [host: "sentinel_2", port: 20000],
+        [host: "sentinel_1", port: 10000]
+      ]
+      children = [
+        {RedixSentinel, [[group: "demo", sentinels: sentinels, role: "master"], [], [name: :sentinel]]}
+      ]
+      {:ok, _pid} = Supervisor.start_link(children, strategy: :one_for_one)
+      {:ok, "PONG"} = RedixSentinel.command(:sentinel, ["PING"])
   """
 
   require Logger
@@ -64,6 +78,14 @@ defmodule RedixSentinel do
     Connection.start_link(__MODULE__, {sentinel_opts, redis_connection_opts, redix_behaviour_opts}, connection_opts)
   end
 
+  @doc false
+  def child_spec(args) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, args},
+      type: :worker,
+    }
+  end
 
   @doc "see `Redix.stop/2`."
   @spec stop(GenServer.server, timeout) :: :ok

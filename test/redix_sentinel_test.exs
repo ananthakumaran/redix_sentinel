@@ -78,4 +78,13 @@ defmodule RedixSentinelTest do
     end
     :ok = RedixSentinel.stop(pid)
   end
+
+  test "can be started under supervisor" do
+    children = [
+      {RedixSentinel, [@sentinel_config, [], [name: :sentinel]]}
+    ]
+    {:ok, pid} = Supervisor.start_link(children, strategy: :one_for_one)
+    {:ok, "PONG"} = RedixSentinel.command(:sentinel, ["PING"])
+    :ok = Supervisor.stop(pid)
+  end
 end
