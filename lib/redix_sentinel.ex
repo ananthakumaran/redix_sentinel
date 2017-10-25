@@ -137,6 +137,7 @@ defmodule RedixSentinel do
         callback.(node)
       catch
         :exit, {:noproc, _} -> {:error, %Redix.ConnectionError{reason: :closed}}
+        :exit, {%Redix.ConnectionError{} = reason, _} -> {:error, reason}
       end
     end
   end
