@@ -247,11 +247,8 @@ defmodule RedixSentinel do
       {:ok, conn} = Redix.start_link(Keyword.merge(s.redis_connection_opts, node_info), Keyword.merge(s.redix_behaviour_opts, [exit_on_disconnection: true]))
 
 
-      verify_role = Keyword.fetch!(sentinel_opts, :verify_role)
-      if verify_role > 0 do
-        _ = log(s, :sentinel_connection, "Verifying role")
-        [^role | _] = Redix.command!(conn, ["ROLE"])
-      end
+      _ = log(s, :sentinel_connection, "Verifying role")
+      confirm_role!(conn, role)
 
       Redix.stop(sentinel_conn)
 
@@ -320,5 +317,11 @@ defmodule RedixSentinel do
         "port" -> {:port, String.to_integer(value)}
       end
     end)
+  end
+
+  defp confirm_role!(conn, role) do
+    [^role | _] = Redix.command!(conn, ["ROLE"])
+    rescue Redix.Error ->
+      true = Redix.command!(conn, ["INFO", "replication"]) =~ "role:#{role}"
   end
 end
