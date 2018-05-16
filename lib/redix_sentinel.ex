@@ -279,7 +279,7 @@ defmodule RedixSentinel do
     role = Keyword.fetch!(s.sentinel_opts, :role)
     current = self()
     {pid, reference} = spawn_monitor(fn ->
-      [^role | _] = Redix.command!(node, ["ROLE"])
+      confirm_role!(node, role)
       send(current, {:ok})
     end)
     receive do
