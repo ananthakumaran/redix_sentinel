@@ -246,8 +246,9 @@ defmodule RedixSentinel do
       _ = log(s, :sentinel_connection, "Got #{role} address #{inspect(node_info)}")
       {:ok, conn} = Redix.start_link(Keyword.merge(s.redis_connection_opts, node_info), Keyword.merge(s.redix_behaviour_opts, [exit_on_disconnection: true]))
 
+
       _ = log(s, :sentinel_connection, "Verifying role")
-      [^role | _] = Redix.command!(conn, ["ROLE"])
+      confirm_role!(conn, role)
 
       Redix.stop(sentinel_conn)
 
@@ -278,7 +279,7 @@ defmodule RedixSentinel do
     role = Keyword.fetch!(s.sentinel_opts, :role)
     current = self()
     {pid, reference} = spawn_monitor(fn ->
-      [^role | _] = Redix.command!(node, ["ROLE"])
+      confirm_role!(node, role)
       send(current, {:ok})
     end)
     receive do
@@ -316,5 +317,34 @@ defmodule RedixSentinel do
         "port" -> {:port, String.to_integer(value)}
       end
     end)
+  end
+
+  defp confirm_role!(conn, role) do
+    [^role | _] = Redix.command!(conn, ["ROLE"])
+    rescue e in Redix.Error ->
+      if e.message == "ERR unknown command 'ROLE'" do
+        {:ok, ^role} =
+          Redix.command!(conn, ["INFO", "replication"])
+          |> parse_replication_info()
+          |> Map.fetch("role")
+      else
+        raise e
+      end
+  end
+
+  defp parse_replication_info(resp_str) do
+    newline = ~r{(\r\n|\r|\n)}
+
+    resp_str
+    # Trim any leading or trailing whitespace
+    |> String.trim()
+    # Split the response on newlines
+    |> String.split(newline)
+    # Split each line on ":"
+    |> Enum.map(&String.split(&1, ":"))
+    # Only keep lists (line) with two elements (key & value)
+    |> Enum.filter(fn t -> length(t) == 2 end)
+    # Turn the list of 2 element lists into a map
+    |> Map.new(fn [k, v] -> {k, v} end)
   end
 end
