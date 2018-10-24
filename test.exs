@@ -1,4 +1,5 @@
 require Logger
+
 defmodule Test do
   def loop(x, i \\ 0) do
     try do
@@ -6,15 +7,18 @@ defmodule Test do
     catch
       :exit, {:timeout, _} ->
         :ok
+
       :exit, reason ->
-        Logger.error "[exit]=================> #{inspect(reason)}"
+        Logger.error("[exit]=================> #{inspect(reason)}")
         :ok
+
       :error, %Redix.Error{message: message} ->
-        Logger.error "[error]=================> #{message}"
+        Logger.error("[error]=================> #{message}")
         :ok
     end
+
     Process.sleep(100)
-    loop(x, i+1)
+    loop(x, i + 1)
   end
 end
 
@@ -25,27 +29,45 @@ sentinels = [
 ]
 
 spawn_link(fn ->
-  {:ok, conn} = RedixSentinel.start_link([group: "demo", sentinels: sentinels, role: "slave", verify_role: 10_000])
+  {:ok, conn} =
+    RedixSentinel.start_link(
+      group: "demo",
+      sentinels: sentinels,
+      role: "slave",
+      verify_role: 10_000
+    )
+
   Test.loop(fn i ->
     case RedixSentinel.command(conn, ["GET", "#{i}"]) do
       {:ok, _} ->
         if Integer.mod(i, 100) == 0 do
-          Logger.debug "GET #{i}"
+          Logger.debug("GET #{i}")
         end
-      {:error, _error} -> :ok
+
+      {:error, _error} ->
+        :ok
     end
   end)
 end)
 
 spawn_link(fn ->
-  {:ok, conn} = RedixSentinel.start_link([group: "demo", sentinels: sentinels, role: "master", verify_role: 10_000])
+  {:ok, conn} =
+    RedixSentinel.start_link(
+      group: "demo",
+      sentinels: sentinels,
+      role: "master",
+      verify_role: 10_000
+    )
+
   Test.loop(fn i ->
     case RedixSentinel.command(conn, ["SET", "#{i}", "#{i}"]) do
       {:ok, _} ->
         if Integer.mod(i, 100) == 0 do
-          Logger.debug "SET #{i}"
+          Logger.debug("SET #{i}")
         end
-      {:error, _error} -> :ok
+
+      {:error, _error} ->
+        :ok
     end
   end)
 end)

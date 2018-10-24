@@ -3,7 +3,7 @@ version: '3'
 services:
   app:
     container_name: redix_sentinel
-    image: bitwalker/alpine-elixir:1.5.1
+    image: bitwalker/alpine-elixir:1.7.3
     volumes:
       - .:/opt/app
     links:

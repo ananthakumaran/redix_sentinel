@@ -14,12 +14,14 @@ defmodule RedixSentinelTest do
 
   test "dies when the linked node dies" do
     current = self()
+
     spawn(fn ->
-      {ok, pid} = RedixSentinel.start_link(@sentinel_config, [], [name: :sentinel])
+      {ok, pid} = RedixSentinel.start_link(@sentinel_config, [], name: :sentinel)
       {:ok, "PONG"} = RedixSentinel.command(pid, ["PING"])
       send(current, {:pid, pid})
       raise "error"
     end)
+
     receive do
       {:pid, pid} ->
         Process.sleep(100)
@@ -30,7 +32,7 @@ defmodule RedixSentinelTest do
   end
 
   test "restarts redix connection if it dies normally" do
-    {ok, pid} = RedixSentinel.start_link(@sentinel_config, [], [name: :sentinel])
+    {ok, pid} = RedixSentinel.start_link(@sentinel_config, [], name: :sentinel)
     {:ok, "PONG"} = RedixSentinel.command(pid, ["PING"])
     {:ok, node} = Connection.call(pid, :node)
     :ok = Redix.stop(node)
@@ -40,7 +42,7 @@ defmodule RedixSentinelTest do
   end
 
   test "restarts redix connection if it dies abnormally" do
-    {ok, pid} = RedixSentinel.start_link(@sentinel_config, [], [name: :sentinel])
+    {ok, pid} = RedixSentinel.start_link(@sentinel_config, [], name: :sentinel)
     {:ok, "PONG"} = RedixSentinel.command(pid, ["PING"])
     {:ok, node} = Connection.call(pid, :node)
     Process.exit(node, :kill)
@@ -50,7 +52,7 @@ defmodule RedixSentinelTest do
   end
 
   test "stops redix connection" do
-    {ok, pid} = RedixSentinel.start_link(@sentinel_config, [], [name: :sentinel])
+    {ok, pid} = RedixSentinel.start_link(@sentinel_config, [], name: :sentinel)
     {:ok, "PONG"} = RedixSentinel.command(pid, ["PING"])
     {:ok, node} = Connection.call(pid, :node)
     Process.alive?(node) == true
@@ -61,21 +63,25 @@ defmodule RedixSentinelTest do
 
   test "catch noproc errors" do
     current = self()
-    {ok, pid} = RedixSentinel.start_link(@sentinel_config, [], [name: :sentinel])
+    {ok, pid} = RedixSentinel.start_link(@sentinel_config, [], name: :sentinel)
     {:ok, node} = Connection.call(pid, :node)
     :sys.suspend(pid)
+
     spawn_link(fn ->
       {:error, %{reason: :closed}} = RedixSentinel.command(pid, ["PING"])
       send(current, :ok)
     end)
+
     Process.sleep(500)
     Process.exit(node, :kill)
     :sys.resume(pid)
+
     receive do
       :ok -> :ok
     after
       1000 -> flunk("Failed to receive response for PING")
     end
+
     :ok = RedixSentinel.stop(pid)
   end
 
@@ -83,6 +89,7 @@ defmodule RedixSentinelTest do
     children = [
       {RedixSentinel, [@sentinel_config, [], [name: :sentinel]]}
     ]
+
     {:ok, pid} = Supervisor.start_link(children, strategy: :one_for_one)
     {:ok, "PONG"} = RedixSentinel.command(:sentinel, ["PING"])
     :ok = Supervisor.stop(pid)

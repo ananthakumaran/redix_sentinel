@@ -1,7 +1,7 @@
 defmodule RedixSentinel.Utils do
   @moduledoc false
 
-  @spec format_error(atom | String.t) :: String.t
+  @spec format_error(atom | String.t()) :: String.t()
   def format_error(error) when is_binary(error), do: inspect(error)
 
   def format_error(:tcp_closed) do
@@ -33,7 +33,6 @@ defmodule RedixSentinel.Utils do
     end
   end
 
-
   @default_opts [
     backoff_initial: 500,
     backoff_max: 30_000,
@@ -45,19 +44,29 @@ defmodule RedixSentinel.Utils do
     disconnection: :error,
     failed_connection: :error,
     reconnection: :info,
-    sentinel_connection: :debug,
+    sentinel_connection: :debug
   ]
 
-  @redix_behaviour_opts [:socket_opts, :sync_connect, :backoff_initial, :backoff_max, :log, :exit_on_disconnection]
+  @redix_behaviour_opts [
+    :socket_opts,
+    :sync_connect,
+    :backoff_initial,
+    :backoff_max,
+    :log,
+    :exit_on_disconnection
+  ]
   @sentinel_behaviour_opts [:backoff_initial, :backoff_max]
   def split_opts(sentinel_opts, redis_connection_opts, redix_opts) do
     {redix_behaviour_opts, connection_opts} = Keyword.split(redix_opts, @redix_behaviour_opts)
     _ = not_supported([:exit_on_disconnection, :sync_connect], redix_opts)
 
-    {sentinel_behaviour_opts, redix_behaviour_opts} = Keyword.split(redix_behaviour_opts, @sentinel_behaviour_opts)
-    sentinel_opts = Keyword.merge(@default_opts, sentinel_opts)
-    |> Keyword.merge(sentinel_behaviour_opts)
-    |> Keyword.put(:log, Keyword.get(redix_behaviour_opts, :log, @log_default_opts))
+    {sentinel_behaviour_opts, redix_behaviour_opts} =
+      Keyword.split(redix_behaviour_opts, @sentinel_behaviour_opts)
+
+    sentinel_opts =
+      Keyword.merge(@default_opts, sentinel_opts)
+      |> Keyword.merge(sentinel_behaviour_opts)
+      |> Keyword.put(:log, Keyword.get(redix_behaviour_opts, :log, @log_default_opts))
 
     {sentinel_opts, redis_connection_opts, redix_behaviour_opts, connection_opts}
   end

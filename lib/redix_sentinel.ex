@@ -72,10 +72,16 @@ defmodule RedixSentinel do
   supported. All the extra options like `:name` are forwarded to the
   `GenServer.start_link/3`
   """
-  @spec start_link(Keyword.t, Keyword.t, Keyword.t) :: GenServer.on_start
+  @spec start_link(Keyword.t(), Keyword.t(), Keyword.t()) :: GenServer.on_start()
   def start_link(sentinel_opts, redis_connection_options \\ [], redix_opts \\ []) do
-    {sentinel_opts, redis_connection_opts, redix_behaviour_opts, connection_opts} = Utils.split_opts(sentinel_opts, redis_connection_options, redix_opts)
-    Connection.start_link(__MODULE__, {sentinel_opts, redis_connection_opts, redix_behaviour_opts}, connection_opts)
+    {sentinel_opts, redis_connection_opts, redix_behaviour_opts, connection_opts} =
+      Utils.split_opts(sentinel_opts, redis_connection_options, redix_opts)
+
+    Connection.start_link(
+      __MODULE__,
+      {sentinel_opts, redis_connection_opts, redix_behaviour_opts},
+      connection_opts
+    )
   end
 
   @doc false
@@ -83,20 +89,20 @@ defmodule RedixSentinel do
     %{
       id: __MODULE__,
       start: {__MODULE__, :start_link, args},
-      type: :worker,
+      type: :worker
     }
   end
 
   @doc "see `Redix.stop/2`."
-  @spec stop(GenServer.server, timeout) :: :ok
+  @spec stop(GenServer.server(), timeout) :: :ok
   def stop(conn, timeout \\ :infinity) do
     GenServer.stop(conn, :normal, timeout)
   end
 
   @doc "see `Redix.pipeline/3`."
-  @spec pipeline(GenServer.server, [command], Keyword.t) ::
-    {:ok, [Redix.Protocol.redis_value]} |
-    {:error, atom}
+  @spec pipeline(GenServer.server(), [command], Keyword.t()) ::
+          {:ok, [Redix.Protocol.redis_value()]}
+          | {:error, atom}
   def pipeline(conn, commands, opts \\ []) do
     with_node(conn, fn node ->
       Redix.pipeline(node, commands, opts)
@@ -104,8 +110,8 @@ defmodule RedixSentinel do
   end
 
   @doc "see `Redix.pipeline!/3`."
-  @spec pipeline!(GenServer.server, [command], Keyword.t) ::
-    [Redix.Protocol.redis_value] | no_return
+  @spec pipeline!(GenServer.server(), [command], Keyword.t()) ::
+          [Redix.Protocol.redis_value()] | no_return
   def pipeline!(conn, commands, opts \\ []) do
     with_node(conn, fn node ->
       Redix.pipeline!(node, commands, opts)
@@ -113,9 +119,9 @@ defmodule RedixSentinel do
   end
 
   @doc "see `Redix.command/3`."
-  @spec command(GenServer.server, command, Keyword.t) ::
-    {:ok, Redix.Protocol.redis_value} |
-    {:error, atom | Redix.Error.t}
+  @spec command(GenServer.server(), command, Keyword.t()) ::
+          {:ok, Redix.Protocol.redis_value()}
+          | {:error, atom | Redix.Error.t()}
   def command(conn, command, opts \\ []) do
     with_node(conn, fn node ->
       Redix.command(node, command, opts)
@@ -123,8 +129,8 @@ defmodule RedixSentinel do
   end
 
   @doc "see `Redix.command!/3`."
-  @spec command!(GenServer.server, command, Keyword.t) ::
-    Redix.Protocol.redis_value | no_return
+  @spec command!(GenServer.server(), command, Keyword.t()) ::
+          Redix.Protocol.redis_value() | no_return
   def command!(conn, command, opts \\ []) do
     with_node(conn, fn node ->
       Redix.command!(node, command, opts)
@@ -144,7 +150,13 @@ defmodule RedixSentinel do
 
   def init({sentinel_opts, redis_connection_opts, redix_behaviour_opts}) do
     Process.flag(:trap_exit, true)
-    state = %State{redix_behaviour_opts: redix_behaviour_opts, redis_connection_opts: redis_connection_opts, sentinel_opts: sentinel_opts}
+
+    state = %State{
+      redix_behaviour_opts: redix_behaviour_opts,
+      redis_connection_opts: redis_connection_opts,
+      sentinel_opts: sentinel_opts
+    }
+
     :ok = schedule_verification(state)
     {:connect, :init, state}
   end
@@ -152,20 +164,41 @@ defmodule RedixSentinel do
   def connect(info, %State{sentinel_opts: sentinel_opts} = s) do
     case find_and_connect(s) do
       {:ok, s} ->
-        _ = if info == :backoff || info == :reconnect do
-          log(s, :reconnection, ["Reconnected to (", Utils.format_host(s.node_info), ")"])
-        end
+        _ =
+          if info == :backoff || info == :reconnect do
+            log(s, :reconnection, ["Reconnected to (", Utils.format_host(s.node_info), ")"])
+          end
+
         s = %{s | backoff_current: nil}
         {:ok, s}
+
       {:error, reason} ->
         backoff = get_backoff(s)
-        _ = log(s, :failed_connection, ["Failed to connect to ", to_string(Keyword.fetch!(sentinel_opts, :role)), " node ", Utils.format_error(reason), ". Sleeping for ", to_string(backoff), "ms."])
+
+        _ =
+          log(s, :failed_connection, [
+            "Failed to connect to ",
+            to_string(Keyword.fetch!(sentinel_opts, :role)),
+            " node ",
+            Utils.format_error(reason),
+            ". Sleeping for ",
+            to_string(backoff),
+            "ms."
+          ])
+
         {:backoff, backoff, %{s | backoff_current: backoff}}
     end
   end
 
   def disconnect({:error, reason}, %State{node_info: node_info} = s) do
-    _ = log(s, :disconnection, ["Disconnected from (", Utils.format_host(node_info), "): ", Utils.format_error(reason)])
+    _ =
+      log(s, :disconnection, [
+        "Disconnected from (",
+        Utils.format_host(node_info),
+        "): ",
+        Utils.format_error(reason)
+      ])
+
     cleanup(s)
     {:connect, :reconnect, %{s | node: nil, backoff_current: nil, node_info: nil}}
   end
@@ -190,6 +223,7 @@ defmodule RedixSentinel do
 
   def handle_info(:verify_role, s) do
     :ok = schedule_verification(s)
+
     case verify_role(s) do
       {:ok} -> {:noreply, s}
       {:error, _} = e -> {:disconnect, e, s}
@@ -224,6 +258,7 @@ defmodule RedixSentinel do
         :exit, _ -> :ok
       end
     end
+
     :ok
   end
 
@@ -235,29 +270,45 @@ defmodule RedixSentinel do
     {:error, "Failed to connect via any sentinel"}
   end
 
-  defp try_sentinel(%State{sentinel_opts: sentinel_opts} = s, tried, [sentinel_connection_opts | rest]) do
+  defp try_sentinel(%State{sentinel_opts: sentinel_opts} = s, tried, [
+         sentinel_connection_opts | rest
+       ]) do
     role = Keyword.fetch!(sentinel_opts, :role)
     current = self()
-    {pid, reference} = spawn_monitor(fn ->
-      _ = log(s, :sentinel_connection, "Trying sentinel #{inspect(sentinel_connection_opts)}")
-      {:ok, sentinel_conn} = Redix.start_link(sentinel_connection_opts, Keyword.merge(s.redix_behaviour_opts, [exit_on_disconnection: true, sync_connect: true]))
-      node_info = get_node_info(sentinel_conn, Keyword.fetch!(sentinel_opts, :group), role)
 
-      _ = log(s, :sentinel_connection, "Got #{role} address #{inspect(node_info)}")
-      {:ok, conn} = Redix.start_link(Keyword.merge(s.redis_connection_opts, node_info), Keyword.merge(s.redix_behaviour_opts, [exit_on_disconnection: true]))
+    {pid, reference} =
+      spawn_monitor(fn ->
+        _ = log(s, :sentinel_connection, "Trying sentinel #{inspect(sentinel_connection_opts)}")
 
+        {:ok, sentinel_conn} =
+          Redix.start_link(
+            sentinel_connection_opts,
+            Keyword.merge(s.redix_behaviour_opts, exit_on_disconnection: true, sync_connect: true)
+          )
 
-      _ = log(s, :sentinel_connection, "Verifying role")
-      confirm_role!(conn, role)
+        node_info = get_node_info(sentinel_conn, Keyword.fetch!(sentinel_opts, :group), role)
 
-      Redix.stop(sentinel_conn)
+        _ = log(s, :sentinel_connection, "Got #{role} address #{inspect(node_info)}")
 
-      s = %{s | node: conn, node_info: node_info}
-      send(current, {:ok, s})
-    end)
+        {:ok, conn} =
+          Redix.start_link(
+            Keyword.merge(s.redis_connection_opts, node_info),
+            Keyword.merge(s.redix_behaviour_opts, exit_on_disconnection: true)
+          )
+
+        _ = log(s, :sentinel_connection, "Verifying role")
+        confirm_role!(conn, role)
+
+        Redix.stop(sentinel_conn)
+
+        s = %{s | node: conn, node_info: node_info}
+        send(current, {:ok, s})
+      end)
+
     receive do
       {:DOWN, ^reference, :process, ^pid, _reason} ->
         try_sentinel(s, [sentinel_connection_opts | tried], rest)
+
       {:ok, s} ->
         Process.demonitor(reference, [:flush])
         Process.link(s.node)
@@ -267,6 +318,7 @@ defmodule RedixSentinel do
 
   defp schedule_verification(%State{sentinel_opts: sentinel_opts}) do
     verify_role = Keyword.fetch!(sentinel_opts, :verify_role)
+
     if verify_role > 0 do
       _ref = Process.send_after(self(), :verify_role, verify_role)
       :ok
@@ -278,18 +330,23 @@ defmodule RedixSentinel do
   defp verify_role(%State{node: node} = s) do
     role = Keyword.fetch!(s.sentinel_opts, :role)
     current = self()
-    {pid, reference} = spawn_monitor(fn ->
-      confirm_role!(node, role)
-      send(current, {:ok})
-    end)
+
+    {pid, reference} =
+      spawn_monitor(fn ->
+        confirm_role!(node, role)
+        send(current, {:ok})
+      end)
+
     receive do
       {:DOWN, ^reference, :process, ^pid, _reason} ->
         {:error, "Failed to verify role"}
+
       {:ok} ->
         Process.demonitor(reference, [:flush])
         {:ok}
     end
   end
+
   defp verify_role(_), do: {:ok}
 
   defp log(state, action, message) do
@@ -297,6 +354,7 @@ defmodule RedixSentinel do
       state.sentinel_opts
       |> Keyword.fetch!(:log)
       |> Keyword.fetch!(action)
+
     Logger.log(level, message)
   end
 
@@ -307,11 +365,12 @@ defmodule RedixSentinel do
 
   defp get_node_info(conn, group, "slave") do
     Redix.command!(conn, ["SENTINEL", "slaves", group])
-    |> Enum.random
+    |> Enum.random()
     |> Enum.chunk(2)
-    |> Enum.filter_map(fn [key, _value] ->
+    |> Enum.filter(fn [key, _value] ->
       Enum.member?(["ip", "port"], key)
-    end, fn [key, value] ->
+    end)
+    |> Enum.map(fn [key, value] ->
       case key do
         "ip" -> {:host, value}
         "port" -> {:port, String.to_integer(value)}
@@ -321,7 +380,8 @@ defmodule RedixSentinel do
 
   defp confirm_role!(conn, role) do
     [^role | _] = Redix.command!(conn, ["ROLE"])
-    rescue e in Redix.Error ->
+  rescue
+    e in Redix.Error ->
       if e.message == "ERR unknown command 'ROLE'" do
         {:ok, ^role} =
           Redix.command!(conn, ["INFO", "replication"])
