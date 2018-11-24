@@ -5,3 +5,9 @@
 
 
 See the [documenation](https://hexdocs.pm/redix_sentinel) for more information
+
+
+## Deprecated
+
+Redix has added support for sentinel in 0.9.0. This library will not
+get updated anymore.
